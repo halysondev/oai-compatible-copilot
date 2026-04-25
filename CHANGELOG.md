@@ -4,6 +4,12 @@
 
 - Feat: Add provider-level `queryParams` support for OpenAI-compatible URLs such as Azure OpenAI `api-version`.
 
+## 0.3.6 (2026-04-24)
+
+- Feat: Add `xhigh` and `max` reasoning effort options for DeepSeek-V4.
+- Feat: Add structured logging system with `oaicopilot.logLevel` configuration. Logs are written to `~/.copilot/oaicopilot/logs/`. Default is 'off' (no logging).
+- Fix: Remove dependency on GitHub Copilot Chat extension.
+
 ## 0.3.5 (2026-04-16)
 
 - Feat(openai-responses): Add `prompt_cache_key` to enable OpenAI prompt caching.

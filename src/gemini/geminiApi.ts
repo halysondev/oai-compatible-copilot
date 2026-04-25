@@ -11,6 +11,7 @@ import type { HFModelItem } from "../types";
 import type { OpenAIFunctionToolDef } from "../openai/openaiTypes";
 
 import { CommonApi } from "../commonApi";
+import { logger } from "../logger";
 
 import {
 	isImageMimeType,
@@ -486,8 +487,11 @@ function openaiToolChoiceToGeminiToolConfig(toolChoice: unknown): GeminiToolConf
 }
 
 export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateContentRequest> {
-	constructor(private readonly toolCallMetaByCallId?: Map<string, GeminiToolCallMeta>) {
-		super();
+	constructor(
+		modelId: string,
+		private readonly toolCallMetaByCallId?: Map<string, GeminiToolCallMeta>
+	) {
+		super(modelId);
 	}
 
 	convertMessages(
@@ -761,6 +765,8 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		progress: Progress<LanguageModelResponsePart2>,
 		token: CancellationToken
 	): Promise<void> {
+		const modelId = this._modelId;
+		logger.debug("gemini.stream.start", { modelId });
 		const reader = responseBody.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
@@ -791,6 +797,7 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 						continue;
 					}
 					const data = line.slice(5).trim();
+					logger.debug("gemini.stream.chunk", { modelId, data });
 					if (!data || data === "[DONE]") {
 						continue;
 					}
@@ -798,7 +805,13 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 					let payload: GeminiGenerateContentResponse | null = null;
 					try {
 						payload = JSON.parse(data) as GeminiGenerateContentResponse;
-					} catch {
+					} catch (e) {
+						console.error("[Gemini Provider] Failed to parse streaming chunk:", e, "data:", data);
+						logger.error("gemini.stream.chunk.error", {
+							modelId,
+							error: e instanceof Error ? e.message : String(e),
+							data,
+						});
 						continue;
 					}
 					if (!payload) {
@@ -983,6 +996,11 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 					}
 				}
 			}
+			logger.debug("gemini.stream.done", { modelId });
+		} catch (e) {
+			console.error("[Gemini Provider] Streaming response error:", e);
+			logger.error("gemini.stream.error", { modelId, error: e instanceof Error ? e.message : String(e) });
+			throw e;
 		} finally {
 			reader.releaseLock();
 			this.reportEndThinking(progress);
@@ -996,7 +1014,81 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		baseUrl: string,
 		apiKey: string
 	): AsyncGenerator<{ type: "text"; text: string }> {
-		throw new Error("Method not implemented.");
+		const contents: GeminiGenerateContentRequest["contents"] = messages.map((msg) => ({
+			role: msg.role === "assistant" ? "model" : "user",
+			parts: [{ text: msg.content }],
+		}));
+
+		let requestBody: GeminiGenerateContentRequest = {
+			contents,
+		};
+		if (systemPrompt) {
+			requestBody.systemInstruction = { role: "user", parts: [{ text: systemPrompt }] };
+		}
+		requestBody = this.prepareRequestBody(requestBody, model, undefined);
+
+		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "gemini", model.headers);
+		const url = buildGeminiGenerateContentUrl(baseUrl, model.id, true);
+		if (!url) {
+			throw new Error("Invalid Gemini base URL configuration.");
+		}
+
+		const response = await fetch(url, {
+			method: "POST",
+			headers,
+			body: JSON.stringify(requestBody),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`Gemini API request failed: [${response.status}] ${response.statusText}\n${errorText}`);
+		}
+
+		if (!response.body) {
+			throw new Error("No response body from Gemini API");
+		}
+
+		const reader = response.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) {
+					break;
+				}
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+
+				for (const line of lines) {
+					if (!line.startsWith("data:")) {
+						continue;
+					}
+					const data = line.slice(5).trim();
+					if (!data || data === "[DONE]") {
+						continue;
+					}
+
+					try {
+						const parsed = JSON.parse(data) as GeminiGenerateContentResponse;
+						const candidate = parsed.candidates?.[0];
+						const parts = candidate?.content?.parts ?? [];
+						for (const part of parts) {
+							if (part.text && part.thought !== true) {
+								yield { type: "text", text: part.text };
+							}
+						}
+					} catch (e) {
+						console.error("[Gemini Provider] Failed to parse streaming chunk:", e, "data:", data);
+					}
+				}
+			}
+		} finally {
+			reader.releaseLock();
+		}
 	}
 }
 

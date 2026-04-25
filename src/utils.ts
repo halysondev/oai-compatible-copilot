@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import type { HFModelItem, RetryConfig } from "./types";
 import { OpenAIFunctionToolDef } from "./openai/openaiTypes";
 
+import { logger } from "./logger";
+
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_INTERVAL_MS = 1000;
 const RETRY_BACKOFF_FACTOR = 2;
@@ -311,6 +313,14 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 			// Exponential backoff: interval doubles each attempt, capped at 60s
 			const delayMs = Math.min(baseIntervalMs * Math.pow(RETRY_BACKOFF_FACTOR, attempt), RETRY_MAX_INTERVAL_MS);
 
+			logger.warn("retry.attempt", {
+				attempt: attempt + 1,
+				maxAttempts,
+				delayMs,
+				errorName: lastError.name,
+				errorMessage: lastError.message,
+			});
+
 			console.error(
 				`[OAI Compatible Model Provider] Retryable error detected, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxAttempts}). Error:`,
 				lastError instanceof Error ? { name: lastError.name, message: lastError.message } : String(lastError)
@@ -322,5 +332,9 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 	}
 
 	// This should never be reached, but TypeScript needs it
+	logger.error("retry.exhausted", {
+		maxAttempts,
+		lastError: lastError ? { name: lastError.name, message: lastError.message } : String(lastError),
+	});
 	throw lastError || new Error("Retry failed");
 }

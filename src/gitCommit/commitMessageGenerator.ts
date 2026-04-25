@@ -6,11 +6,34 @@ import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import { OllamaApi } from "../ollama/ollamaApi";
 import { normalizeUserModels } from "../utils";
+import { logger } from "../logger";
 import type { HFModelItem } from "../types";
 
 /**
  * Git commit message generator module
  */
+
+interface GitInputBoxLike {
+	value: string;
+}
+
+interface GitRepositoryLike {
+	rootUri: vscode.Uri;
+	inputBox: GitInputBoxLike;
+}
+
+interface GitApiLike {
+	repositories: GitRepositoryLike[];
+	getRepository(rootUri: vscode.Uri): GitRepositoryLike | null | undefined;
+}
+
+interface GitExtensionExportsLike {
+	getAPI(version: 1): GitApiLike;
+}
+
+interface RepoQuickPickItem extends vscode.QuickPickItem {
+	repo: GitRepositoryLike | null;
+}
 
 let commitGenerationAbortController: AbortController | undefined;
 
@@ -22,7 +45,7 @@ const DEFAULT_PROMPT = {
 
 export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vscode.SourceControl) {
 	try {
-		const gitExtension = vscode.extensions.getExtension("vscode.git")?.exports;
+		const gitExtension = vscode.extensions.getExtension<GitExtensionExportsLike>("vscode.git")?.exports;
 		if (!gitExtension) {
 			throw new Error("Git extension not found");
 		}
@@ -34,6 +57,9 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 
 		// If scm is provided, then the user specified one repository by clicking the "Source Control" menu button
 		if (scm) {
+			if (!scm.rootUri) {
+				throw new Error("Repository root URI not found for provided SCM");
+			}
 			const repository = git.getRepository(scm.rootUri);
 
 			if (!repository) {
@@ -51,7 +77,7 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 	}
 }
 
-async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: any[]) {
+async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: GitRepositoryLike[]) {
 	const reposWithChanges = await filterForReposWithChanges(repos);
 
 	if (reposWithChanges.length === 0) {
@@ -88,8 +114,8 @@ async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretSto
 	}
 }
 
-async function filterForReposWithChanges(repos: any[]) {
-	const reposWithChanges = [];
+async function filterForReposWithChanges(repos: GitRepositoryLike[]): Promise<GitRepositoryLike[]> {
+	const reposWithChanges: GitRepositoryLike[] = [];
 
 	// Check which repositories have changes
 	for (const repo of repos) {
@@ -98,16 +124,16 @@ async function filterForReposWithChanges(repos: any[]) {
 			if (gitDiff) {
 				reposWithChanges.push(repo);
 			}
-		} catch (error) {
+		} catch {
 			// Skip repositories with errors (no changes, etc.)
 		}
 	}
 	return reposWithChanges;
 }
 
-async function promptRepoSelection(repos: any[]) {
+async function promptRepoSelection(repos: GitRepositoryLike[]): Promise<RepoQuickPickItem | undefined> {
 	// Multiple repos with changes - ask user to choose
-	const repoItems = repos.map((repo) => ({
+	const repoItems: RepoQuickPickItem[] = repos.map((repo) => ({
 		label: repo.rootUri.fsPath.split(path.sep).pop() || repo.rootUri.fsPath,
 		description: repo.rootUri.fsPath,
 		repo: repo,
@@ -116,7 +142,7 @@ async function promptRepoSelection(repos: any[]) {
 	repoItems.unshift({
 		label: "$(git-commit) Generate for all repositories with changes",
 		description: `Generate commit messages for ${repos.length} repositories`,
-		repo: null as any,
+		repo: null,
 	});
 
 	return await vscode.window.showQuickPick(repoItems, {
@@ -124,7 +150,7 @@ async function promptRepoSelection(repos: any[]) {
 	});
 }
 
-async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: any) {
+async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: GitRepositoryLike) {
 	const inputBox = repository.inputBox;
 	const repoPath = repository.rootUri.fsPath;
 	const gitDiff = await getGitDiff(repoPath);
@@ -143,7 +169,9 @@ async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, rep
 	);
 }
 
-async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff: string, inputBox: any) {
+async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff: string, inputBox: GitInputBoxLike) {
+	const startTime = Date.now();
+	let modelId: string | undefined;
 	try {
 		vscode.commands.executeCommand("setContext", "oaicopilot.isGeneratingCommit", true);
 		const config = vscode.workspace.getConfiguration();
@@ -181,6 +209,8 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 
 		// Use the first model marked for commit generation
 		const selectedModel = commitModels[0];
+		modelId = selectedModel.id;
+		logger.info("commit.start", { modelId });
 
 		// Get API key for the model's provider
 		const apiKey = await ensureApiKey(secrets, selectedModel.owned_by);
@@ -208,14 +238,14 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 		const apiMode = selectedModel.apiMode ?? "openai";
 
 		if (apiMode === "anthropic") {
-			apiInstance = new AnthropicApi();
+			apiInstance = new AnthropicApi(modelId);
 		} else if (apiMode === "ollama") {
-			apiInstance = new OllamaApi();
+			apiInstance = new OllamaApi(modelId);
 		} else if (apiMode === "openai-responses") {
-			apiInstance = new OpenaiResponsesApi();
+			apiInstance = new OpenaiResponsesApi(modelId);
 		} else {
 			// Default to OpenAI-compatible API
-			apiInstance = new OpenaiApi();
+			apiInstance = new OpenaiApi(modelId);
 		}
 
 		commitGenerationAbortController = new AbortController();
@@ -235,8 +265,11 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 		if (!inputBox.value) {
 			throw new Error("empty API response");
 		}
+
+		logger.info("commit.end", { modelId, durationMs: Date.now() - startTime });
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
+		logger.error("commit.error", { modelId: modelId ?? "unknown", error: errorMessage });
 		vscode.window.showErrorMessage(`Failed to generate commit message: ${errorMessage}`);
 	} finally {
 		vscode.commands.executeCommand("setContext", "oaicopilot.isGeneratingCommit", false);
@@ -262,10 +295,9 @@ function extractCommitMessage(str: string): string {
 }
 
 function removeThinkTags(text: string): string {
-  const regex = /<think>.*?<\/think>/gs;
-  return text.replace(regex, '').trim();
+	const regex = /<think>.*?<\/think>/gs;
+	return text.replace(regex, "").trim();
 }
-
 
 /**
  * Ensure an API key exists in SecretStorage
