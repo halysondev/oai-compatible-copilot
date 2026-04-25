@@ -6,33 +6,33 @@ import { buildOpenAICompatibleUrl } from "../urlUtils";
 suite("urlUtils", () => {
 	test("appends configured query params to common OpenAI-compatible endpoints", () => {
 		const queryParams = { "api-version": "2025-04-01-preview" };
-		const baseUrl = "https://[deploy].openai.azure.com/openai/";
+		const baseUrl = "https://deployment.openai.azure.com/openai/";
 
 		assert.strictEqual(
 			buildOpenAICompatibleUrl(baseUrl, "/models", queryParams),
-			"https://[deploy].openai.azure.com/openai/models?api-version=2025-04-01-preview"
+			"https://deployment.openai.azure.com/openai/models?api-version=2025-04-01-preview"
 		);
 		assert.strictEqual(
 			buildOpenAICompatibleUrl(baseUrl, "/chat/completions", queryParams),
-			"https://[deploy].openai.azure.com/openai/chat/completions?api-version=2025-04-01-preview"
+			"https://deployment.openai.azure.com/openai/chat/completions?api-version=2025-04-01-preview"
 		);
 		assert.strictEqual(
 			buildOpenAICompatibleUrl(baseUrl, "/responses", queryParams),
-			"https://[deploy].openai.azure.com/openai/responses?api-version=2025-04-01-preview"
+			"https://deployment.openai.azure.com/openai/responses?api-version=2025-04-01-preview"
 		);
 	});
 
 	test("treats base URLs with and without trailing slash the same", () => {
 		const queryParams = { "api-version": "2025-04-01-preview" };
-		const withSlash = buildOpenAICompatibleUrl("https://[deploy].openai.azure.com/openai/", "/models", queryParams);
-		const withoutSlash = buildOpenAICompatibleUrl("https://[deploy].openai.azure.com/openai", "/models", queryParams);
+		const withSlash = buildOpenAICompatibleUrl("https://deployment.openai.azure.com/openai/", "/models", queryParams);
+		const withoutSlash = buildOpenAICompatibleUrl("https://deployment.openai.azure.com/openai", "/models", queryParams);
 
 		assert.strictEqual(withSlash, withoutSlash);
 	});
 
 	test("preserves base URL query params and lets configured query params override matching keys", () => {
 		const url = new URL(
-			buildOpenAICompatibleUrl("https://[deploy].openai.azure.com/openai/?deployment=foo&api-version=2024-12-01", "/models", {
+			buildOpenAICompatibleUrl("https://deployment.openai.azure.com/openai/?deployment=foo&api-version=2024-12-01", "/models", {
 				"api-version": "2025-04-01-preview",
 				region: "eastus",
 			})
@@ -47,7 +47,7 @@ suite("urlUtils", () => {
 	test("lets endpoint-owned query params override both base URL and configured query params", () => {
 		const url = new URL(
 			buildOpenAICompatibleUrl(
-				"https://[deploy].openai.azure.com/openai/?api-version=2024-12-01&alt=json",
+				"https://deployment.openai.azure.com/openai/?api-version=2024-12-01&alt=json",
 				"/responses",
 				{ "api-version": "2025-04-01-preview", alt: "compact" },
 				{ alt: "sse" }
@@ -74,14 +74,14 @@ suite("urlUtils", () => {
 			}) as typeof globalThis.fetch;
 
 			await fetchModels(
-				"https://[deploy].openai.azure.com/openai/",
+				"https://deployment.openai.azure.com/openai/",
 				"test-key",
 				"openai",
 				undefined,
 				{ "api-version": "2025-04-01-preview" }
 			);
 			await fetchModels(
-				"https://[deploy].openai.azure.com/openai/",
+				"https://deployment.openai.azure.com/openai/",
 				"test-key",
 				"openai-responses",
 				undefined,
@@ -100,11 +100,11 @@ suite("urlUtils", () => {
 
 		assert.strictEqual(
 			requestedUrls[0],
-			"https://[deploy].openai.azure.com/openai/models?api-version=2025-04-01-preview"
+			"https://deployment.openai.azure.com/openai/models?api-version=2025-04-01-preview"
 		);
 		assert.strictEqual(
 			requestedUrls[1],
-			"https://[deploy].openai.azure.com/openai/models?api-version=2025-04-01-preview"
+			"https://deployment.openai.azure.com/openai/models?api-version=2025-04-01-preview"
 		);
 		assert.strictEqual(requestedUrls[2], "https://api.anthropic.com/models");
 	});
