@@ -142,6 +142,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 			</select>
 		</td>
 		<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' style="width: 100%; font-family: monospace; font-size: 12px;"></textarea></td>
+		<td><textarea class="provider-input" data-field="queryParams" rows="2" placeholder='{"api-version": "2025-04-01-preview"}' style="width: 100%; font-family: monospace; font-size: 12px;"></textarea></td>
 		<td>
 			<button class="save-provider-btn secondary">Save</button>
 			<button class="cancel-provider-btn secondary">Cancel</button>
@@ -161,14 +162,8 @@ document.getElementById("addProvider").addEventListener("click", () => {
 			providerData[field] = input.value;
 		});
 
-		let headers = undefined;
-		if (providerData.headers && providerData.headers.trim()) {
-			try {
-				headers = JSON.parse(providerData.headers);
-			} catch (e) {
-				// ignore invalid JSON
-			}
-		}
+		const headers = parseObjectJsonField(providerData.headers);
+		const queryParams = parseObjectJsonField(providerData.queryParams);
 
 		vscode.postMessage({
 			type: "addProvider",
@@ -177,6 +172,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 			apiKey: providerData.apiKey || undefined,
 			apiMode: providerData.apiMode || undefined,
 			headers: headers,
+			queryParams: queryParams,
 		});
 
 		newRow.remove();
@@ -207,6 +203,7 @@ modelProviderInput.addEventListener("change", () => {
 		// Use headers from provider info
 		const headers = state.providerInfo[selectedProvider].headers;
 		modelHeadersInput.value = headers ? JSON.stringify(headers, null, 2) : "";
+		const queryParams = state.providerInfo[selectedProvider].queryParams;
 
 		// Request to fetch remote models for the selected provider
 		vscode.postMessage({
@@ -215,6 +212,7 @@ modelProviderInput.addEventListener("change", () => {
 			apiKey: state.providerKeys[selectedProvider] || state.apiKey,
 			apiMode: state.providerInfo[selectedProvider].apiMode || modelApiModeInput.value || "openai",
 			headers,
+			queryParams,
 		});
 	}
 });
@@ -341,7 +339,7 @@ function renderProviders() {
 	);
 
 	if (!providers.length) {
-		providerTableBody.innerHTML = '<tr><td colspan="6" class="no-data">No providers</td></tr>';
+		providerTableBody.innerHTML = '<tr><td colspan="7" class="no-data">No providers</td></tr>';
 		// Clear the provider dropdown as well
 		modelProviderInput.innerHTML = '<option value="">Select Provider</option>';
 		return;
@@ -353,6 +351,8 @@ function renderProviders() {
 			const providerModels = state.models.filter((m) => m.owned_by === provider);
 			const firstModel = providerModels[0];
 			const headersJson = firstModel.headers ? JSON.stringify(firstModel.headers, null, 2) : "";
+			const providerQueryParams = providerModels.find((m) => m.queryParams !== undefined)?.queryParams;
+			const queryParamsJson = providerQueryParams ? JSON.stringify(providerQueryParams, null, 2) : "";
 
 			return `
 			<tr data-provider="${provider}">
@@ -369,6 +369,7 @@ function renderProviders() {
 					</select>
 				</td>
 				<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' style="width: 100%; font-family: monospace; font-size: 12px;">${headersJson}</textarea></td>
+				<td><textarea class="provider-input" data-field="queryParams" rows="2" placeholder='{"api-version": "2025-04-01-preview"}' style="width: 100%; font-family: monospace; font-size: 12px;">${queryParamsJson}</textarea></td>
 				<td class="action-buttons">
 					<button class="update-provider-btn" data-provider="${provider}">Save</button>
 					<button class="delete-provider-btn danger" data-provider="${provider}">Delete</button>
@@ -386,6 +387,7 @@ function renderProviders() {
 			// Get the provider's configuration information
 			const providerModels = state.models.filter((m) => m.owned_by === provider);
 			const firstModel = providerModels[0];
+			const providerQueryParams = providerModels.find((m) => m.queryParams !== undefined)?.queryParams;
 
 			// Store provider info for auto-fill
 			state.providerInfo[provider] = {
@@ -393,6 +395,7 @@ function renderProviders() {
 				apiMode: firstModel.apiMode || "openai",
 				apiKey: state.providerKeys[provider] || state.apiKey,
 				headers: firstModel.headers,
+				queryParams: providerQueryParams,
 			};
 
 			return `<option value="${provider}">${provider}</option>`;
@@ -412,14 +415,8 @@ function renderProviders() {
 				providerData[field] = input.value;
 			});
 
-			let headers = undefined;
-			if (providerData.headers && providerData.headers.trim()) {
-				try {
-					headers = JSON.parse(providerData.headers);
-				} catch (e) {
-					// ignore invalid JSON
-				}
-			}
+			const headers = parseObjectJsonField(providerData.headers);
+			const queryParams = parseObjectJsonField(providerData.queryParams);
 
 			vscode.postMessage({
 				type: "updateProvider",
@@ -428,6 +425,7 @@ function renderProviders() {
 				apiKey: providerData.apiKey || undefined,
 				apiMode: providerData.apiMode || undefined,
 				headers: headers,
+				queryParams: queryParams,
 			});
 		});
 	});
@@ -569,6 +567,8 @@ function resetModelForm() {
 	modelIdInput.removeAttribute("data-editing");
 	modelIdInput.removeAttribute("data-original-id");
 	modelIdInput.removeAttribute("data-original-configId");
+	modelIdInput.removeAttribute("data-original-provider");
+	modelIdInput.removeAttribute("data-original-query-params");
 	// disbale fields when form is reset
 	modelBaseUrlInput.disabled = true;
 	modelApiModeInput.disabled = true;
@@ -579,10 +579,16 @@ function resetModelForm() {
 // Collect model form data
 function collectModelFormData() {
 	const isEditing = modelIdInput.hasAttribute("data-editing");
+	const selectedProvider = modelProviderInput.value.trim();
+	const providerInfo = selectedProvider ? state.providerInfo[selectedProvider] : undefined;
+	const originalProvider = modelIdInput.getAttribute("data-original-provider") || "";
+	const originalQueryParams = parseObjectJsonField(modelIdInput.getAttribute("data-original-query-params"));
+	const inheritedQueryParams =
+		providerInfo?.queryParams || (selectedProvider === originalProvider ? originalQueryParams : undefined);
 
 	return {
 		id: modelIdInput.value.trim(),
-		owned_by: modelProviderInput.value.trim(),
+		owned_by: selectedProvider,
 		displayName: modelDisplayNameInput.value.trim() || undefined,
 		configId: modelConfigIdInput.value.trim() || undefined,
 		baseUrl: modelBaseUrlInput.value.trim() || undefined,
@@ -616,6 +622,7 @@ function collectModelFormData() {
 		thinking: buildThinkingConfig(),
 		// Parse headers and extra JSON
 		headers: parseJsonField(modelHeadersInput.value),
+		queryParams: inheritedQueryParams || undefined,
 		extra: parseJsonField(modelExtraInput.value),
 		// Include original modelId and configId for update operations
 		originalModelId: isEditing ? modelIdInput.getAttribute("data-original-id") : undefined,
@@ -663,6 +670,11 @@ function parseJsonField(value) {
 		// ignore invalid JSON
 		return undefined;
 	}
+}
+
+function parseObjectJsonField(value) {
+	const parsed = parseJsonField(value);
+	return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : undefined;
 }
 
 // Show error message in the UI
@@ -862,6 +874,11 @@ function populateModelForm(model) {
 	// Store the original modelId and configId for update operations
 	modelIdInput.setAttribute("data-original-id", model.id || "");
 	modelIdInput.setAttribute("data-original-configId", model.configId || "");
+	modelIdInput.setAttribute("data-original-provider", model.owned_by || "");
+	modelIdInput.setAttribute(
+		"data-original-query-params",
+		model.queryParams ? JSON.stringify(model.queryParams) : ""
+	);
 
 	modelIdInput.value = model.id || "";
 
@@ -881,6 +898,7 @@ function populateModelForm(model) {
 	const fetchBaseUrl = model.baseUrl || state.baseUrl;
 	const fetchApiKey = state.providerKeys[currentProvider] || state.apiKey;
 	const fetchApiMode = providerInfo?.apiMode || model.apiMode || modelApiModeInput.value || "openai";
+	const fetchQueryParams = providerInfo?.queryParams || model.queryParams;
 
 	// Request to fetch remote models for the selected provider
 	vscode.postMessage({
@@ -889,6 +907,7 @@ function populateModelForm(model) {
 		apiKey: fetchApiKey,
 		apiMode: fetchApiMode,
 		headers: model.headers,
+		queryParams: fetchQueryParams,
 	});
 
 	modelProviderInput.value = currentProvider;

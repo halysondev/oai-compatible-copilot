@@ -26,6 +26,7 @@ import { AnthropicRequestBody } from "./anthropic/anthropicTypes";
 import { GeminiApi, buildGeminiGenerateContentUrl, type GeminiToolCallMeta } from "./gemini/geminiApi";
 import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
+import { buildOpenAICompatibleUrl } from "./urlUtils";
 
 /**
  * VS Code Chat provider backed by Hugging Face Inference Providers.
@@ -261,8 +262,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			} else if (apiMode === "openai-responses") {
 				// OpenAI Responses API mode
 				const openaiResponsesApi = new OpenaiResponsesApi();
-				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
 				const statefulModelId = parsedModelId.baseId;
+				const responsesUrl = buildOpenAICompatibleUrl(BASE_URL, "/responses", um?.queryParams);
 
 				// Convert full history once (also extracts system `instructions`).
 				const fullInput = openaiResponsesApi.convertMessages(messages, modelConfig);
@@ -279,7 +280,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 
 				const canUsePreviousResponseId =
 					!!marker?.marker &&
-					!this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(normalizedBaseUrl) &&
+					!this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(responsesUrl) &&
 					Array.isArray(deltaInput) &&
 					deltaInput.length > 0;
 
@@ -300,7 +301,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 					requestBody.prompt_cache_key = `oaicopilot-${parsedModelId.baseId}`;
 				}
 				// send Responses API request with retry
-				const url = `${normalizedBaseUrl}/responses`;
+				const url = responsesUrl;
 
 				// If the user explicitly set `previous_response_id` via `extra`, don't apply stateful slicing.
 				let addedPreviousResponseId = false;
@@ -345,7 +346,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 						throw err;
 					}
 
-					this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.add(normalizedBaseUrl);
+					this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.add(url);
 
 					let fallbackBody: Record<string, unknown> = {
 						model: parsedModelId.baseId,
@@ -443,7 +444,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				// console.debug("[OAI Compatible Model Provider] RequestBody:", JSON.stringify(requestBody));
 
 				// send chat request with retry
-				const url = `${BASE_URL.replace(/\/+$/, "")}/chat/completions`;
+				const url = buildOpenAICompatibleUrl(BASE_URL, "/chat/completions", um?.queryParams);
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -528,7 +529,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 	}
 }
 
-type OpenAIResponsesStatefulMarkerLocation = { marker: string; index: number };
+interface OpenAIResponsesStatefulMarkerLocation {
+	marker: string;
+	index: number;
+}
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {
 	const payload = `${modelId}\\${marker}`;

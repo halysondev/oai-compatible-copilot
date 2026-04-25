@@ -307,6 +307,42 @@ You can specify custom HTTP headers that will be sent with every request to a sp
 
 </details>
 
+## ✨ Query Params for OpenAI/Azure URLs
+
+You can specify `queryParams` to append query parameters to OpenAI-compatible request URLs. This is useful for Azure OpenAI-style endpoints that require values such as `api-version`.
+
+<details>
+<summary>Click Here for Details</summary>
+
+### Query Params Example
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "gpt-4.1",
+        "owned_by": "azure-openai",
+        "baseUrl": "https://[deploy].openai.azure.com/openai/",
+        "queryParams": {
+            "api-version": "2025-04-01-preview"
+        }
+    }
+]
+```
+
+This configuration produces:
+
+- `https://[deploy].openai.azure.com/openai/models?api-version=2025-04-01-preview`
+- `https://[deploy].openai.azure.com/openai/chat/completions?api-version=2025-04-01-preview`
+- `https://[deploy].openai.azure.com/openai/responses?api-version=2025-04-01-preview`
+
+**Important Notes:**
+- `queryParams` applies to OpenAI-compatible model discovery and request URLs
+- Parameters already present in `baseUrl` are preserved unless the same key is defined in `queryParams`
+- If the endpoint itself adds a query parameter, the endpoint value takes precedence
+- Query parameter values must be strings
+
+</details>
+
 ## ✨ Custom Request body parameters
 
 The `extra` field allows you to add arbitrary parameters to the API request body. This is useful for provider-specific features that aren't covered by the standard parameters.
@@ -445,6 +481,7 @@ All parameters support individual configuration for different models, providing 
   - `type`: Set to 'enabled' to enable thinking, 'disabled' to disable thinking
 - `reasoning_effort`: Reasoning effort level (OpenAI reasoning configuration)
 - `headers`: Custom HTTP headers to be sent with every request to this model's provider (e.g., `{"X-API-Version": "v1", "X-Custom-Header": "value"}`). These headers will be merged with the default headers (Authorization, Content-Type, User-Agent)
+- `queryParams`: Query parameters to append to OpenAI-compatible request URLs for this model's provider (e.g., `{"api-version": "2025-04-01-preview"}`)
 - `extra`: Extra request body parameters.
 - `include_reasoning_in_request`: Whether to include reasoning_content in assistant messages sent to the API. Supports deepseek-v3.2 and similar models.
 - `apiMode`: API mode: 'openai' (Default) for API (/chat/completions), 'openai-responses' for API (/responses), 'ollama' for API (/api/chat), 'anthropic' for API (/v1/messages), 'gemini' for API (/v1beta/models/{model}:streamGenerateContent?alt=sse).

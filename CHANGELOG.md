@@ -1,5 +1,9 @@
 # Change Log
 
+## Unreleased
+
+- Feat: Add provider-level `queryParams` support for OpenAI-compatible URLs such as Azure OpenAI `api-version`.
+
 ## 0.3.5 (2026-04-16)
 
 - Feat(openai-responses): Add `prompt_cache_key` to enable OpenAI prompt caching.

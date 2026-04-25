@@ -316,6 +316,13 @@
 								},
 								"description": "Custom HTTP headers to be sent with every request to this model's provider. These headers will be merged with the default headers (Authorization, Content-Type, User-Agent)."
 							},
+							"queryParams": {
+								"type": "object",
+								"additionalProperties": {
+									"type": "string"
+								},
+								"description": "Query parameters to append to OpenAI-compatible request URLs for this model's provider. These parameters are merged with any query string already present in baseUrl."
+							},
 							"include_reasoning_in_request": {
 								"type": "boolean",
 								"default": false,

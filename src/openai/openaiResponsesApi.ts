@@ -20,6 +20,7 @@ import {
 } from "../utils";
 
 import { CommonApi } from "../commonApi";
+import { buildOpenAICompatibleUrl } from "../urlUtils";
 
 export interface ResponsesInputMessage {
 	role: "user" | "assistant" | "system";
@@ -676,7 +677,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "openai-responses", model.headers);
 
-		const url = `${baseUrl.replace(/\/+$/, "")}/responses`;
+		const url = buildOpenAICompatibleUrl(baseUrl, "/responses", model.queryParams);
 
 		// Make the API request
 		const response = await fetch(url, {

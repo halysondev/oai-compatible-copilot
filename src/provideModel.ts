@@ -6,6 +6,7 @@ import { normalizeUserModels } from "./utils";
 import { VersionManager } from "./versionManager";
 import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
+import { buildOpenAICompatibleUrl, type QueryParams } from "./urlUtils";
 
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
@@ -140,7 +141,8 @@ export async function fetchModels(
 	baseUrl: string,
 	apiKey: string,
 	apiMode?: HFApiMode | string,
-	customHeaders?: Record<string, string>
+	customHeaders?: Record<string, string>,
+	queryParams?: QueryParams
 ): Promise<{ models: HFModelItem[] }> {
 	const normalizedApiMode = apiMode ?? "openai";
 	if (normalizedApiMode === "gemini") {
@@ -157,7 +159,11 @@ export async function fetchModels(
 			"User-Agent": VersionManager.getUserAgent(),
 		};
 		const headers = customHeaders ? { ...baseHeaders, ...customHeaders } : baseHeaders;
-		const resp = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
+		const url =
+			normalizedApiMode === "openai" || normalizedApiMode === "openai-responses"
+				? buildOpenAICompatibleUrl(baseUrl, "/models", queryParams)
+				: `${baseUrl.replace(/\/+$/, "")}/models`;
+		const resp = await fetch(url, {
 			method: "GET",
 			headers,
 		});

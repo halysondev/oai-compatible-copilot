@@ -28,6 +28,7 @@ import {
 } from "../utils";
 
 import { CommonApi } from "../commonApi";
+import { buildOpenAICompatibleUrl } from "../urlUtils";
 
 export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unknown>> {
 	constructor() {
@@ -479,7 +480,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 
 		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "openai", model.headers);
 
-		const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+		const url = buildOpenAICompatibleUrl(baseUrl, "/chat/completions", model.queryParams);
 
 		// Make the API request
 		const response = await fetch(url, {

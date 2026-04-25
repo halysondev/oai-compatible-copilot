@@ -70,6 +70,13 @@ export interface HFModelItem {
 	headers?: Record<string, string>;
 
 	/**
+	 * Query parameters to append to OpenAI-compatible request URLs for this model's provider.
+	 * These parameters are merged on top of any query string already present in `baseUrl`.
+	 * Example: { "api-version": "2025-04-01-preview" }
+	 */
+	queryParams?: Record<string, string>;
+
+	/**
 	 * Whether to include reasoning_content in assistant messages sent to the API.
 	 * Support deepseek-v3.2 or others.
 	 */

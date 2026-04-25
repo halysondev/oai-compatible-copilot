@@ -58,6 +58,7 @@ type IncomingMessage =
 			apiKey: string;
 			apiMode?: HFApiMode | string;
 			headers?: Record<string, string>;
+			queryParams?: Record<string, string>;
 	  }
 	| {
 			type: "addProvider";
@@ -66,6 +67,7 @@ type IncomingMessage =
 			apiKey?: string;
 			apiMode?: string;
 			headers?: Record<string, string>;
+			queryParams?: Record<string, string>;
 	  }
 	| {
 			type: "updateProvider";
@@ -74,6 +76,7 @@ type IncomingMessage =
 			apiKey?: string;
 			apiMode?: string;
 			headers?: Record<string, string>;
+			queryParams?: Record<string, string>;
 	  }
 	| { type: "deleteProvider"; provider: string }
 	| { type: "addModel"; model: HFModelItem }
@@ -181,7 +184,13 @@ export class ConfigViewPanel {
 				break;
 			case "fetchModels": {
 				try {
-					const { models } = await fetchModels(message.baseUrl, message.apiKey, message.apiMode, message.headers);
+					const { models } = await fetchModels(
+						message.baseUrl,
+						message.apiKey,
+						message.apiMode,
+						message.headers,
+						message.queryParams
+					);
 					this.panel.webview.postMessage({ type: "modelsFetched", models });
 				} catch (err) {
 					console.error("[oaicopilot] fetchModels failed", err);
@@ -191,10 +200,24 @@ export class ConfigViewPanel {
 				break;
 			}
 			case "addProvider":
-				await this.addProvider(message.provider, message.baseUrl, message.apiKey, message.apiMode, message.headers);
+				await this.addProvider(
+					message.provider,
+					message.baseUrl,
+					message.apiKey,
+					message.apiMode,
+					message.headers,
+					message.queryParams
+				);
 				break;
 			case "updateProvider":
-				await this.updateProvider(message.provider, message.baseUrl, message.apiKey, message.apiMode, message.headers);
+				await this.updateProvider(
+					message.provider,
+					message.baseUrl,
+					message.apiKey,
+					message.apiMode,
+					message.headers,
+					message.queryParams
+				);
 				break;
 			case "deleteProvider":
 				await this.deleteProvider(message.provider);
@@ -328,7 +351,8 @@ export class ConfigViewPanel {
 				if (fullModelId === commitModel) {
 					return { ...model, useForCommitGeneration: true };
 				} else {
-					const { useForCommitGeneration: _useForCommitGeneration, ...rest } = model;
+					const rest = { ...model };
+					delete rest.useForCommitGeneration;
 					return rest;
 				}
 			});
@@ -374,7 +398,8 @@ export class ConfigViewPanel {
 		baseUrl?: string,
 		apiKey?: string,
 		apiMode?: string,
-		headers?: Record<string, string>
+		headers?: Record<string, string>,
+		queryParams?: Record<string, string>
 	) {
 		const trimmedProvider = provider.trim();
 		if (!trimmedProvider) {
@@ -403,6 +428,7 @@ export class ConfigViewPanel {
 				baseUrl: baseUrl,
 				apiMode: (apiMode as HFApiMode) || "openai",
 				headers: headers,
+				queryParams: queryParams,
 			};
 			models.push(defaultModel);
 		}
@@ -418,7 +444,8 @@ export class ConfigViewPanel {
 		baseUrl?: string,
 		apiKey?: string,
 		apiMode?: string,
-		headers?: Record<string, string>
+		headers?: Record<string, string>,
+		queryParams?: Record<string, string>
 	) {
 		const trimmedProvider = provider.trim();
 		if (!trimmedProvider) {
@@ -445,12 +472,15 @@ export class ConfigViewPanel {
 
 		const updatedModels = models.map((model) => {
 			if (model.owned_by === trimmedProvider) {
-				const { headers: _, ...rest } = model;
+				const rest = { ...model };
+				delete rest.headers;
+				delete rest.queryParams;
 				return {
 					...rest,
 					baseUrl: baseUrl || model.baseUrl,
 					apiMode: (apiMode as HFApiMode) || model.apiMode,
 					...(headers !== undefined && { headers }),
+					...(queryParams !== undefined && { queryParams }),
 				};
 			}
 			return model;
@@ -489,6 +519,10 @@ export class ConfigViewPanel {
 	private async addModel(model: HFModelItem) {
 		const config = vscode.workspace.getConfiguration();
 		const models = config.get<HFModelItem[]>("oaicopilot.models", []);
+		const providerDefaults = models.find((m) => m.owned_by === model.owned_by && m.queryParams !== undefined);
+		if (model.queryParams === undefined && providerDefaults?.queryParams) {
+			model.queryParams = providerDefaults.queryParams;
+		}
 
 		// Check if model with same id and configId already exists
 		const existingIndex = models.findIndex(
@@ -524,6 +558,9 @@ export class ConfigViewPanel {
 
 			if (isTargetModel) {
 				// Update with new values
+				if (model.queryParams === undefined && model.owned_by === m.owned_by && m.queryParams !== undefined) {
+					return { ...model, queryParams: m.queryParams };
+				}
 				return model;
 			}
 			return m;
