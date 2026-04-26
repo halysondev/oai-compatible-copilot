@@ -14,6 +14,13 @@ declare module "vscode" {
 		 * What extension initiated the request to the language model
 		 */
 		readonly requestInitiator: string;
+
+		/**
+		 * Per-model configuration provided by the user and validated against the model's configuration schema.
+		 */
+		readonly modelConfiguration?: {
+			readonly [key: string]: any;
+		};
 	}
 
 	/**
@@ -51,7 +58,21 @@ declare module "vscode" {
 		readonly category?: { label: string; order: number };
 
 		readonly statusIcon?: ThemeIcon;
+
+		/**
+		 * Optional JSON schema describing configuration options for this model.
+		 */
+		readonly configurationSchema?: LanguageModelConfigurationSchema;
 	}
+
+	export type LanguageModelConfigurationSchema = {
+		readonly properties?: {
+			readonly [key: string]: Record<string, any> & {
+				readonly enumItemLabels?: string[];
+				readonly group?: string;
+			};
+		};
+	};
 
 	export interface LanguageModelChatCapabilities {
 		/**

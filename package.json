@@ -25,7 +25,7 @@
 		"type": "git",
 		"url": "https://github.com/JohnnyZ93/oai-compatible-copilot"
 	},
-	"version": "0.3.6",
+	"version": "0.3.7",
 	"engines": {
 		"vscode": "^1.104.0"
 	},
@@ -209,6 +209,40 @@
 									"minimal"
 								],
 								"description": "Reasoning effort level (OpenAI reasoning configuration)"
+							},
+							"reasoning_effort_configurable": {
+								"type": "boolean",
+								"default": true,
+								"description": "Expose a Reasoning Effort selector for this model in the Copilot model picker. The selected value overrides reasoning_effort for OpenAI-compatible requests."
+							},
+							"reasoning_effort_default": {
+								"type": "string",
+								"default": "medium",
+								"enum": [
+									"max",
+									"xhigh",
+									"high",
+									"medium",
+									"low",
+									"minimal"
+								],
+								"description": "Default value for the Copilot model picker Reasoning Effort selector. If omitted, reasoning_effort is used, then medium."
+							},
+							"reasoning_effort_supported": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"enum": [
+										"max",
+										"xhigh",
+										"high",
+										"medium",
+										"low",
+										"minimal"
+									]
+								},
+								"uniqueItems": true,
+								"description": "Reasoning effort values shown in the Copilot model picker. Values are displayed in canonical order. If omitted, all supported OpenAI reasoning_effort values are shown."
 							},
 							"thinking": {
 								"type": "object",

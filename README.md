@@ -270,6 +270,38 @@ In this example, you'll have three different configurations of the glm-4.6 model
 
 </details>
 
+## ✨ Reasoning Effort selector in the Copilot model picker
+
+For OpenAI-compatible reasoning models, you can expose a `Reasoning Effort` selector directly in the Copilot model picker. The model still appears once, but Copilot lets you choose the effort level before sending requests.
+
+<details>
+<summary>Click Here for Details</summary>
+
+Enable the selector per model with `reasoning_effort_configurable`. The selected value overrides the model's `reasoning_effort` field for OpenAI Chat Completions and OpenAI Responses requests.
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "gpt-5.1",
+        "owned_by": "openai",
+        "baseUrl": "https://api.openai.com/v1",
+        "apiMode": "openai-responses",
+        "max_completion_tokens": 4096,
+        "reasoning_effort_configurable": true,
+        "reasoning_effort_default": "medium",
+        "reasoning_effort_supported": ["high", "medium", "low", "minimal"]
+    }
+]
+```
+
+- `reasoning_effort_configurable`: shows the selector in Copilot for this model.
+- `reasoning_effort_default`: default selector value. If omitted, `reasoning_effort` is used, then `medium`.
+- `reasoning_effort_supported`: optional allow-list of selectable values. If omitted, all supported OpenAI `reasoning_effort` values are shown.
+
+This selector only controls the OpenAI `reasoning_effort` parameter. OpenRouter-style `reasoning.effort` remains configured manually through the `reasoning` object.
+
+</details>
+
 ## ✨ Custom Headers
 
 You can specify custom HTTP headers that will be sent with every request to a specific model's provider. This is useful for:
@@ -480,6 +512,9 @@ All parameters support individual configuration for different models, providing 
 - `thinking`: Thinking configuration for Zai provider
   - `type`: Set to 'enabled' to enable thinking, 'disabled' to disable thinking
 - `reasoning_effort`: Reasoning effort level (OpenAI reasoning configuration)
+- `reasoning_effort_configurable`: Expose a `Reasoning Effort` selector for this model in the Copilot model picker. The selection overrides `reasoning_effort` for OpenAI-compatible requests.
+- `reasoning_effort_default`: Default value for the Copilot model picker `Reasoning Effort` selector. If omitted, `reasoning_effort` is used, then `medium`.
+- `reasoning_effort_supported`: Optional list of selectable `reasoning_effort` values shown in the Copilot model picker. If omitted, all supported values are shown.
 - `headers`: Custom HTTP headers to be sent with every request to this model's provider (e.g., `{"X-API-Version": "v1", "X-Custom-Header": "value"}`). These headers will be merged with the default headers (Authorization, Content-Type, User-Agent)
 - `queryParams`: Query parameters to append to OpenAI-compatible request URLs for this model's provider (e.g., `{"api-version": "2025-04-01-preview"}`)
 - `extra`: Extra request body parameters.

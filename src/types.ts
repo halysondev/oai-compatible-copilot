@@ -17,6 +17,8 @@ export interface HFArchitecture {
 	output_modalities?: string[];
 }
 
+export type ReasoningEffort = "max" | "xhigh" | "high" | "medium" | "low" | "minimal";
+
 export interface HFModelItem {
 	id: string;
 	object?: string;
@@ -33,6 +35,9 @@ export interface HFModelItem {
 	// OpenAI new standard parameter
 	max_completion_tokens?: number;
 	reasoning_effort?: string;
+	reasoning_effort_configurable?: boolean;
+	reasoning_effort_default?: ReasoningEffort;
+	reasoning_effort_supported?: ReasoningEffort[];
 	enable_thinking?: boolean;
 	thinking_budget?: number;
 	// New thinking configuration for Zai provider

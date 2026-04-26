@@ -33,6 +33,7 @@ import {
 } from "./contextWindowHookBridge";
 import { buildOpenAICompatibleUrl } from "./urlUtils";
 import { logger } from "./logger";
+import { applyReasoningEffortSelection } from "./reasoningEffort";
 
 let nextContextWindowRequestId = 1;
 
@@ -138,6 +139,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			if (!um) {
 				um = userModels.find((um) => um.id === parsedModelId.baseId);
 			}
+
+			um = applyReasoningEffortSelection(um, options.modelConfiguration);
 
 			// Check if using Ollama native API mode
 			const apiMode = um?.apiMode ?? "openai";

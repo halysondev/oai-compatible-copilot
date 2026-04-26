@@ -366,6 +366,35 @@
 										<option value="minimal">Minimal</option>
 									</select>
 								</div>
+								<div class="field">
+									<label for="modelReasoningEffortConfigurable">Reasoning Effort Picker</label>
+									<div class="field-description">Show Reasoning Effort in Copilot model picker.</div>
+									<select id="modelReasoningEffortConfigurable" class="model-input">
+										<option value="">Default (False)</option>
+										<option value="true">True</option>
+										<option value="false">False</option>
+									</select>
+								</div>
+							</div>
+							<div class="row">
+								<div class="field">
+									<label for="modelReasoningEffortDefault">Picker Default Effort</label>
+									<div class="field-description">Default effort shown in Copilot model picker.</div>
+									<select id="modelReasoningEffortDefault" class="model-input">
+										<option value=""></option>
+										<option value="max">Max</option>
+										<option value="xhigh">XHigh</option>
+										<option value="high">High</option>
+										<option value="medium">Medium</option>
+										<option value="low">Low</option>
+										<option value="minimal">Minimal</option>
+									</select>
+								</div>
+								<div class="field">
+									<label for="modelReasoningEffortSupported">Picker Supported Efforts</label>
+									<div class="field-description">Comma-separated allow-list, e.g. high, medium, low.</div>
+									<input id="modelReasoningEffortSupported" type="text" class="model-input" />
+								</div>
 							</div>
 							<!-- Reasoning Configuration -->
 							<div class="retry-config">

@@ -8,6 +8,7 @@ import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
 import { buildOpenAICompatibleUrl, type QueryParams } from "./urlUtils";
 import { logger } from "./logger";
+import { buildReasoningEffortConfigurationSchema } from "./reasoningEffort";
 
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
@@ -56,6 +57,7 @@ export async function prepareLanguageModelChatInformation(
 						toolCalling: true,
 						imageInput: m?.vision ?? false,
 					},
+					configurationSchema: buildReasoningEffortConfigurationSchema(m),
 				} satisfies LanguageModelChatInformation;
 			});
 	} else {

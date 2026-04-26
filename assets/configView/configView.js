@@ -50,6 +50,9 @@ const modelFrequencyPenaltyInput = document.getElementById("modelFrequencyPenalt
 const modelPresencePenaltyInput = document.getElementById("modelPresencePenalty");
 const modelRepetitionPenaltyInput = document.getElementById("modelRepetitionPenalty");
 const modelReasoningEffortInput = document.getElementById("modelReasoningEffort");
+const modelReasoningEffortConfigurableInput = document.getElementById("modelReasoningEffortConfigurable");
+const modelReasoningEffortDefaultInput = document.getElementById("modelReasoningEffortDefault");
+const modelReasoningEffortSupportedInput = document.getElementById("modelReasoningEffortSupported");
 const modelEnableThinkingInput = document.getElementById("modelEnableThinking");
 const modelThinkingBudgetInput = document.getElementById("modelThinkingBudget");
 const modelIncludeReasoningInput = document.getElementById("modelIncludeReasoning");
@@ -550,6 +553,9 @@ function resetModelForm() {
 	modelPresencePenaltyInput.value = "";
 	modelRepetitionPenaltyInput.value = "";
 	modelReasoningEffortInput.value = "";
+	modelReasoningEffortConfigurableInput.value = "";
+	modelReasoningEffortDefaultInput.value = "";
+	modelReasoningEffortSupportedInput.value = "";
 	modelEnableThinkingInput.value = "";
 	modelThinkingBudgetInput.value = "";
 	modelIncludeReasoningInput.value = "";
@@ -608,6 +614,11 @@ function collectModelFormData() {
 		repetition_penalty:
 			modelRepetitionPenaltyInput.value !== "" ? parseFloat(modelRepetitionPenaltyInput.value) : undefined,
 		reasoning_effort: modelReasoningEffortInput.value || undefined,
+		reasoning_effort_configurable: modelReasoningEffortConfigurableInput.value
+			? modelReasoningEffortConfigurableInput.value === "true"
+			: undefined,
+		reasoning_effort_default: modelReasoningEffortDefaultInput.value || undefined,
+		reasoning_effort_supported: parseCsvField(modelReasoningEffortSupportedInput.value),
 		enable_thinking: modelEnableThinkingInput.value ? modelEnableThinkingInput.value === "true" : undefined,
 		thinking_budget: modelThinkingBudgetInput.value ? parseInt(modelThinkingBudgetInput.value) : undefined,
 		include_reasoning_in_request: modelIncludeReasoningInput.value
@@ -675,6 +686,14 @@ function parseJsonField(value) {
 function parseObjectJsonField(value) {
 	const parsed = parseJsonField(value);
 	return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : undefined;
+}
+
+function parseCsvField(value) {
+	const items = (value || "")
+		.split(",")
+		.map((item) => item.trim())
+		.filter(Boolean);
+	return items.length > 0 ? Array.from(new Set(items)) : undefined;
 }
 
 // Show error message in the UI
@@ -928,6 +947,12 @@ function populateModelForm(model) {
 	modelPresencePenaltyInput.value = model.presence_penalty || "";
 	modelRepetitionPenaltyInput.value = model.repetition_penalty || "";
 	modelReasoningEffortInput.value = model.reasoning_effort || "";
+	modelReasoningEffortConfigurableInput.value =
+		model.reasoning_effort_configurable !== undefined ? String(model.reasoning_effort_configurable) : "";
+	modelReasoningEffortDefaultInput.value = model.reasoning_effort_default || "";
+	modelReasoningEffortSupportedInput.value = Array.isArray(model.reasoning_effort_supported)
+		? model.reasoning_effort_supported.join(", ")
+		: "";
 	modelEnableThinkingInput.value = model.enable_thinking !== undefined ? String(model.enable_thinking) : "";
 	modelThinkingBudgetInput.value = model.thinking_budget || "";
 	modelIncludeReasoningInput.value =
