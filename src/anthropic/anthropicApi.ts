@@ -222,7 +222,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 	async processStreamingResponse(
 		responseBody: ReadableStream<Uint8Array>,
 		progress: Progress<LanguageModelResponsePart2>,
-		token: CancellationToken
+		token: CancellationToken,
+		localRequestId?: string
 	): Promise<void> {
 		const modelId = this._modelId;
 		logger.debug("anthropic.stream.start", { modelId });
@@ -230,6 +231,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		const reader = responseBody.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
+		const usageSnapshot: Record<string, unknown> = {};
 
 		try {
 			while (true) {
@@ -264,7 +266,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 
 					try {
 						const chunk: AnthropicStreamChunk = JSON.parse(data);
-						await this.processAnthropicChunk(chunk, progress);
+						await this.processAnthropicChunk(chunk, progress, localRequestId, usageSnapshot);
 					} catch (e) {
 						console.error("[Anthropic Provider] Failed to parse SSE chunk:", e, "data:", data);
 						logger.error("anthropic.stream.chunk.error", {
@@ -294,8 +296,19 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 	 */
 	private async processAnthropicChunk(
 		chunk: AnthropicStreamChunk,
-		progress: Progress<LanguageModelResponsePart2>
+		progress: Progress<LanguageModelResponsePart2>,
+		localRequestId?: string,
+		usageSnapshot?: Record<string, unknown>
 	): Promise<void> {
+		if (usageSnapshot && chunk.message?.usage) {
+			Object.assign(usageSnapshot, chunk.message.usage);
+			this.reportUnknownUsageToContextWindow(localRequestId, usageSnapshot);
+		}
+		if (usageSnapshot && chunk.usage) {
+			Object.assign(usageSnapshot, chunk.usage);
+			this.reportUnknownUsageToContextWindow(localRequestId, usageSnapshot);
+		}
+
 		// Handle ping events (ignore)
 		if (chunk.type === "ping") {
 			return;

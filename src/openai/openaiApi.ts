@@ -270,7 +270,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 	async processStreamingResponse(
 		responseBody: ReadableStream<Uint8Array>,
 		progress: Progress<LanguageModelResponsePart2>,
-		token: CancellationToken
+		token: CancellationToken,
+		localRequestId?: string
 	): Promise<void> {
 		const modelId = this._modelId;
 		logger.debug("openai.stream.start", { modelId });
@@ -308,6 +309,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 
 					try {
 						const parsed = JSON.parse(data);
+						this.reportUnknownUsageToContextWindow(localRequestId, (parsed as Record<string, unknown>).usage);
 						await this.processDelta(parsed, progress);
 					} catch (e) {
 						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);

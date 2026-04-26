@@ -85,6 +85,13 @@ export type AnthropicToolChoice =
 	| { type: "tool"; name: string }
 	| { type: "none" };
 
+export interface AnthropicUsage {
+	input_tokens?: number;
+	output_tokens?: number;
+	cache_creation_input_tokens?: number;
+	cache_read_input_tokens?: number;
+}
+
 export interface AnthropicStreamChunk {
 	type:
 		| "message_start"
@@ -104,6 +111,7 @@ export interface AnthropicStreamChunk {
 		model: string;
 		stop_reason?: string;
 		stop_sequence?: string;
+		usage?: AnthropicUsage;
 	};
 	content_block?: {
 		type: "text" | "thinking" | "tool_use";
@@ -120,10 +128,7 @@ export interface AnthropicStreamChunk {
 		partial_json?: string;
 		signature?: string;
 	};
-	usage?: {
-		input_tokens: number;
-		output_tokens: number;
-	};
+	usage?: AnthropicUsage;
 	error?: {
 		type: string;
 		message: string;

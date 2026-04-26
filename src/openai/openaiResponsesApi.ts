@@ -289,7 +289,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 	async processStreamingResponse(
 		responseBody: ReadableStream<Uint8Array>,
 		progress: Progress<LanguageModelResponsePart2>,
-		token: CancellationToken
+		token: CancellationToken,
+		localRequestId?: string
 	): Promise<void> {
 		this._responseId = null;
 		const modelId = this._modelId;
@@ -326,6 +327,11 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 					try {
 						const parsed = JSON.parse(data) as Record<string, unknown>;
+						this.reportUnknownUsageToContextWindow(localRequestId, parsed.usage);
+						const response = parsed.response;
+						if (response && typeof response === "object" && !Array.isArray(response)) {
+							this.reportUnknownUsageToContextWindow(localRequestId, (response as Record<string, unknown>).usage);
+						}
 						await this.processEvent(parsed, progress);
 					} catch (e) {
 						console.error("[OpenAI-Responses Provider] Failed to parse SSE chunk:", e, "data:", data);

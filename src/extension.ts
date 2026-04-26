@@ -7,6 +7,14 @@ import { logger } from "./logger";
 import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
+import {
+	CONTEXT_WINDOW_FIX_CONFIG_KEY,
+	DEFAULT_CONTEXT_WINDOW_FIX_ENABLED,
+} from "./contextWindowHook";
+import {
+	disposeContextWindowHookBridge,
+	initializeContextWindowHookBridge,
+} from "./contextWindowHookBridge";
 
 export function activate(context: vscode.ExtensionContext) {
 	// Initialize logger
@@ -17,6 +25,63 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
+
+	let contextWindowHookInitialization: Promise<boolean> | undefined;
+	let contextWindowHookTouched = false;
+
+	const isContextWindowFixEnabled = (): boolean => {
+		const config = vscode.workspace.getConfiguration();
+		return config.get<boolean>(CONTEXT_WINDOW_FIX_CONFIG_KEY, DEFAULT_CONTEXT_WINDOW_FIX_ENABLED);
+	};
+
+	const ensureContextWindowHookInitialized = (): void => {
+		if (!isContextWindowFixEnabled() || contextWindowHookInitialization) {
+			return;
+		}
+
+		contextWindowHookTouched = true;
+		contextWindowHookInitialization = initializeContextWindowHookBridge()
+			.then((success) => {
+				if (!success) {
+					contextWindowHookInitialization = undefined;
+				}
+				console.log("[OAI Compatible Model Provider] Context window hook initialized:", success);
+				return success;
+			})
+			.catch((error) => {
+				contextWindowHookInitialization = undefined;
+				console.error("[OAI Compatible Model Provider] Failed to initialize context window hook:", error);
+				return false;
+			});
+	};
+
+	const disposeContextWindowHook = (): void => {
+		if (!contextWindowHookTouched) {
+			return;
+		}
+
+		contextWindowHookInitialization = undefined;
+		disposeContextWindowHookBridge()
+			.then((disposed) => {
+				console.log("[OAI Compatible Model Provider] Context window hook disposed:", disposed);
+			})
+			.catch((error) => {
+				console.warn("[OAI Compatible Model Provider] Failed to dispose context window hook:", error);
+			});
+	};
+
+	const syncContextWindowHook = (): void => {
+		if (isContextWindowFixEnabled()) {
+			ensureContextWindowHookInitialized();
+			return;
+		}
+
+		disposeContextWindowHook();
+	};
+
+	syncContextWindowHook();
+	context.subscriptions.push(new vscode.Disposable(() => disposeContextWindowHook()));
+
 	// Register the Hugging Face provider under the vendor id used in package.json
 	vscode.lm.registerLanguageModelChatProvider("oaicopilot", provider);
 
@@ -122,6 +187,9 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration("oaicopilot.logLevel")) {
 				logger.reloadConfig();
+			}
+			if (e.affectsConfiguration(CONTEXT_WINDOW_FIX_CONFIG_KEY)) {
+				syncContextWindowHook();
 			}
 		})
 	);

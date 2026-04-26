@@ -161,7 +161,8 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 	async processStreamingResponse(
 		responseBody: ReadableStream<Uint8Array>,
 		progress: Progress<LanguageModelResponsePart2>,
-		token: CancellationToken
+		token: CancellationToken,
+		localRequestId?: string
 	): Promise<void> {
 		const modelId = this._modelId;
 		logger.debug("ollama.stream.start", { modelId });
@@ -197,6 +198,10 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 
 						// Check if this is the final chunk
 						if (chunk.done) {
+							this.reportUnknownUsageToContextWindow(localRequestId, {
+								prompt_eval_count: chunk.prompt_eval_count,
+								eval_count: chunk.eval_count,
+							});
 							// End any active thinking sequence
 							this.reportEndThinking(progress);
 						}

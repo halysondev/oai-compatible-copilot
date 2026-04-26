@@ -26,8 +26,15 @@ import { AnthropicRequestBody } from "./anthropic/anthropicTypes";
 import { GeminiApi, buildGeminiGenerateContentUrl, type GeminiToolCallMeta } from "./gemini/geminiApi";
 import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
+import {
+	clearContextWindowRequest,
+	reportProgressWithContextWindowRequest,
+	setContextWindowOutputBufferForRequest,
+} from "./contextWindowHookBridge";
 import { buildOpenAICompatibleUrl } from "./urlUtils";
 import { logger } from "./logger";
+
+let nextContextWindowRequestId = 1;
 
 /**
  * VS Code Chat provider backed by Hugging Face Inference Providers.
@@ -95,10 +102,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		progress: Progress<LanguageModelResponsePart2>,
 		token: CancellationToken
 	): Promise<void> {
+		const localRequestId = createContextWindowLocalRequestId();
 		const trackingProgress: Progress<LanguageModelResponsePart2> = {
 			report: (part) => {
 				try {
-					progress.report(part);
+					reportProgressWithContextWindowRequest(localRequestId, progress, part);
 				} catch (e) {
 					console.error("[OAI Compatible Model Provider] Progress.report failed", {
 						modelId: model.id,
@@ -146,6 +154,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			const modelConfig = {
 				includeReasoningInRequest: um?.include_reasoning_in_request ?? false,
 			};
+			setContextWindowOutputBufferForRequest(
+				localRequestId,
+				um?.max_completion_tokens ?? um?.max_tokens ?? model.maxOutputTokens
+			);
 
 			// Update Token Usage
 			updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig);
@@ -241,7 +253,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				if (!response.body) {
 					throw new Error("No response body from Ollama API");
 				}
-				await ollamaApi.processStreamingResponse(response.body, trackingProgress, token);
+				await ollamaApi.processStreamingResponse(response.body, trackingProgress, token, localRequestId);
 			} else if (apiMode === "anthropic") {
 				// Anthropic API mode
 				const anthropicApi = new AnthropicApi(model.id);
@@ -284,7 +296,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				if (!response.body) {
 					throw new Error("No response body from Anthropic API");
 				}
-				await anthropicApi.processStreamingResponse(response.body, trackingProgress, token);
+				await anthropicApi.processStreamingResponse(response.body, trackingProgress, token, localRequestId);
 			} else if (apiMode === "openai-responses") {
 				// OpenAI Responses API mode
 				const openaiResponsesApi = new OpenaiResponsesApi(model.id);
@@ -388,7 +400,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				if (!response.body) {
 					throw new Error("No response body from Responses API");
 				}
-				await openaiResponsesApi.processStreamingResponse(response.body, trackingProgress, token);
+				await openaiResponsesApi.processStreamingResponse(response.body, trackingProgress, token, localRequestId);
 
 				// Append a stateful marker so future requests can reuse `previous_response_id` (Copilot Chat style).
 				const responseId = openaiResponsesApi.responseId;
@@ -455,7 +467,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				if (!response.body) {
 					throw new Error("No response body from Gemini API");
 				}
-				await geminiApi.processStreamingResponse(response.body, trackingProgress, token);
+				await geminiApi.processStreamingResponse(response.body, trackingProgress, token, localRequestId);
 			} else {
 				// OpenAI compatible API mode (default)
 				const openaiApi = new OpenaiApi(model.id);
@@ -494,7 +506,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 				if (!response.body) {
 					throw new Error("No response body from OAI Compatible API");
 				}
-				await openaiApi.processStreamingResponse(response.body, trackingProgress, token);
+				await openaiApi.processStreamingResponse(response.body, trackingProgress, token, localRequestId);
 			}
 		} catch (err) {
 			console.error("[OAI Compatible Model Provider] Chat request failed", {
@@ -512,6 +524,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		} finally {
 			const durationMs = Date.now() - requestStartTime;
 			logger.info("request.end", { modelId: model.id, durationMs });
+			clearContextWindowRequest(localRequestId);
 			// Update last request time after successful completion
 			this._lastRequestTime = Date.now();
 		}
@@ -563,6 +576,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		}
 		return apiKey;
 	}
+}
+
+function createContextWindowLocalRequestId(): string {
+	const id = nextContextWindowRequestId++;
+	return `oaicopilot_${Date.now()}_${id}`;
 }
 
 interface OpenAIResponsesStatefulMarkerLocation {

@@ -763,7 +763,8 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 	async processStreamingResponse(
 		responseBody: ReadableStream<Uint8Array>,
 		progress: Progress<LanguageModelResponsePart2>,
-		token: CancellationToken
+		token: CancellationToken,
+		localRequestId?: string
 	): Promise<void> {
 		const modelId = this._modelId;
 		logger.debug("gemini.stream.start", { modelId });
@@ -817,6 +818,7 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 					if (!payload) {
 						continue;
 					}
+					this.reportUnknownUsageToContextWindow(localRequestId, payload.usageMetadata);
 
 					const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
 					const cand = candidates.length > 0 ? candidates[0] : null;

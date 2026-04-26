@@ -9,6 +9,8 @@ import {
 	CancellationToken,
 } from "vscode";
 import { HFModelItem } from "./types";
+import { reportUsageToContextWindowForRequest } from "./contextWindowHookBridge";
+import type { ProviderUsage } from "./contextWindowHook";
 import { tryParseJSONObject } from "./utils";
 import { VersionManager } from "./versionManager";
 
@@ -89,7 +91,8 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	abstract processStreamingResponse(
 		responseBody: ReadableStream<Uint8Array>,
 		progress: Progress<LanguageModelResponsePart2>,
-		token: CancellationToken
+		token: CancellationToken,
+		localRequestId?: string
 	): Promise<void>;
 
 	/**
@@ -196,6 +199,22 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			return { ...parameters, endLine: startLine + defaultLines };
 		}
 		return parameters;
+	}
+
+	protected reportUsageToContextWindow(localRequestId: string | undefined, usage: ProviderUsage): boolean {
+		if (!localRequestId) {
+			return false;
+		}
+
+		return reportUsageToContextWindowForRequest(localRequestId, usage);
+	}
+
+	protected reportUnknownUsageToContextWindow(localRequestId: string | undefined, usage: unknown): boolean {
+		if (!usage || typeof usage !== "object" || Array.isArray(usage)) {
+			return false;
+		}
+
+		return this.reportUsageToContextWindow(localRequestId, usage as ProviderUsage);
 	}
 
 	/**
